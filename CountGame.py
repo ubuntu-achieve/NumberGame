@@ -1,3 +1,5 @@
+from copy import copy
+from logging.handlers import MemoryHandler
 import random
 import numpy as np
 import matplotlib.pyplot as plt
@@ -121,6 +123,7 @@ class GameController(object):
     
         
     def GameStart(self):
+        # 抽签
         print("游戏开始")
         if self.player1.stats is True:
             activePlayer=self.player1
@@ -130,14 +133,24 @@ class GameController(object):
             inactivePlayer=self.player1
             
         print(f"根据抽签结果，请{activePlayer.name}先行动")
-        
+        # 控制游戏开始
         while not self.isEnd:
+            # 设置最大回合数
             if self.numround >= 200:
                 break
             self.numround+=1
             print(f"第{self.numround}回合，请{activePlayer.name}行动")
-            myhd,ophd=activePlayer.combine(inactivePlayer,inactivePlayer.hl,inactivePlayer.hr)
+            # 活跃玩家行动，输入不活跃玩家对象，左手数字，右手数字
+            # myhd就是当前玩家选择去碰的手 ophd是对方选择碰的手
+            myhd,ophd=activePlayer.combine(inactivePlayer)
+            # 处理结果， 返回所有信息
             self.process(activePlayer,inactivePlayer,myhd,ophd)
+            if self.isEnd == True:
+                # 如果某个玩家已经赢了，那么isEnd就会变成True。self.process 返回的是 赢的玩家名字,输得玩家名字
+                pass
+            else:
+                # 如果没有玩家赢，那么self.process 返回的是 ai玩家的参数，真实玩家的参数
+                pass
             tmp=activePlayer
             activePlayer=inactivePlayer
             inactivePlayer=tmp
@@ -182,15 +195,18 @@ class GameController(object):
         
 
         if inactivePlayer.numShield<0:
-            print(f"{activePlayer.name}赢了!")
+            # print(f"{activePlayer.name}赢了!")
             activePlayer.score += 10
             self.isEnd=True
+            return activePlayer.name, inactivePlayer.name
         else:
-            print(f"第{self.numround}回合,结果为：")
-            print(f"当前{self.player1.name}手上的数字左手：{self.player1.hl},右手：{self.player1.hr}。")
-            print(f"弓个数{self.player1.numBow}，箭个数{self.player1.numArrow}，盾个数{self.player1.numShield}")
-            print(f"当前{self.player2.name}手上的数字左手：{self.player2.hl},右手：{self.player2.hr}。")
-            print(f"弓个数{self.player2.numBow}，箭个数{self.player2.numArrow}，盾个数{self.player2.numShield}")
+            # player 1 是Ai player2 是玩家
+            # print(f"第{self.numround}回合,结果为：")
+            # print(f"当前{self.player1.name}手上的数字左手：{self.player1.hl},右手：{self.player1.hr}。")
+            # print(f"弓个数{self.player1.numBow}，箭个数{self.player1.numArrow}，盾个数{self.player1.numShield}")
+            # print(f"当前{self.player2.name}手上的数字左手：{self.player2.hl},右手：{self.player2.hr}。")
+            # print(f"弓个数{self.player2.numBow}，箭个数{self.player2.numArrow}，盾个数{self.player2.numShield}")
+            return (self.player1.hl, self.player1.hr, self.player1.numBow, self.player1.numArrow, self.player1.numShield),(self.player2.hl, self.player2.hr, self.player2.numBow, self.player2.numArrow, self.player2.numShield)
         
 
 

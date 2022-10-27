@@ -209,7 +209,7 @@ class GameController(object):
             acpnum[myhd]=1
         
         
-        for idx in range(2):
+        for idx in [myhd]:
             if (acpnum[idx]==5)*(past[idx]!=5):
                 activePlayer.numShield+=1
                 activePlayer.score +=1

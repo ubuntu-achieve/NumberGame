@@ -129,44 +129,45 @@ class GameController(object):
         '''
         myhd:玩家准备用于触碰的手
         ophd:电脑准备用于触碰的手
-        return:游戏进行状态、玩家的数据和电脑的数据 例：True,[[[玩家左手数字,玩家右手数字],[技能1,技能2,技能3]],[[电脑左手数字,电脑右手数字],[技能1,技能2,技能3]]]、False,获胜者名称(技能顺序：弓、箭、盾)
+        return:游戏进行状态、玩家的数据和电脑的数据 例：True,[[[玩家左手数字,玩家右手数字],[技能1,技能2,技能3]],[[电脑左手数字,电脑右手数字],[技能1,技能2,技能3]]]、False,获胜者名称(技能顺序：箭、弓、盾)
         '''
         # 检测是否是第一次启动
         if not self.is_begin:
-            if self.player1.stats is True:
-                self.activate_player   = self.player1
-                self.inactivate_player = self.player2
-            else:
-                self.activate_player   = self.player2
-                self.inactivate_player = self.player1
-            self.is_begin = True
+            self.activate_player   = self.player2
+            self.inactivate_player = self.player1
+            # if self.player1.stats is True:
+            #     self.activate_player   = self.player1
+            #     self.inactivate_player = self.player2
+            # else:
+            #     self.activate_player   = self.player2
+            #     self.inactivate_player = self.player1
+            # self.is_begin = True
         # 检测游戏是否结束
         if self.numround >= 200 or self.isEnd:
             self.isEnd = True
             print("游戏已结束")
             return False, self.winner
         self.numround+=1
-        print(f"第{self.numround}回合，请{self.activate_player.name}行动")
+        #print(f"第{self.numround}回合，请{self.activate_player.name}行动")
         # main 对于玩家，此处直接采用从前端界面传回的数据；对于电脑，继续沿用之前的方法
-        try:
-            pass
-        except:
-            myhd,ophd = self.activate_player.combine(self.inactivate_player,self.inactivate_player.hl,self.inactivate_player.hr)
+        for index in range(2):
+            if self.activate_player == self.player1:
+                myhd,ophd = self.activate_player.combine(self.inactivate_player,self.inactivate_player.hl,self.inactivate_player.hr)
         
-        self.process(self.activate_player, self.inactivate_player, myhd, ophd)
-        # 交换当前活跃的选手和静默的选手
-        tmp = self.activate_player
-        self.activate_player = self.inactivate_player
-        self.inactivate_player = tmp
-        print('游戏结束？',self.isEnd)
+            self.process(self.activate_player, self.inactivate_player, myhd, ophd)
+            # 交换当前活跃的选手和静默的选手
+            tmp = self.activate_player
+            self.activate_player = self.inactivate_player
+            self.inactivate_player = tmp
+        print('\r游戏结束？',self.isEnd, end='')
         return True, [
             [
-                [self.player1.hl, self.player1.hr],
-                [self.player1.numBow, self.player1.numArrow, self.player1.numShield],
+                [self.player2.hl, self.player2.hr],
+                [self.player2.numArrow, self.player2.numBow, self.player2.numShield],
             ],
             [
-                [self.player2.hl, self.player2.hr],
-                [self.player2.numBow, self.player2.numArrow, self.player2.numShield],
+                [self.player1.hl, self.player1.hr],
+                [self.player1.numArrow, self.player1.numBow, self.player1.numShield],
             ],
         ]
 
@@ -214,11 +215,11 @@ class GameController(object):
                 activePlayer.score +=1
                 # acpnum[acpnum.index(num)]=1
             elif acpnum[idx]==3*(past[idx]!=3):
-                activePlayer.numBow+=1
+                activePlayer.numArrow+=1
                 activePlayer.score +=1
                 # acpnum[acpnum.index(num)]=1
             elif acpnum[idx]==6*(past[idx]!=6):
-                activePlayer.numArrow+=1
+                activePlayer.numBow+=1
                 activePlayer.score +=1
                 # acpnum[acpnum.index(num)]=1
 

@@ -1,5 +1,4 @@
-from copy import copy
-from logging.handlers import MemoryHandler
+from multiprocessing.dummy import active_children
 import random
 import numpy as np
 import matplotlib.pyplot as plt
@@ -108,22 +107,71 @@ class AiPlayer(Player):
         return choices[scores.argmax()]
 
 
-
+# 只需要调用该类即可
 class GameController(object):
     
     def __init__(self):
-        self.player1,self.player2=self.start()
-        self.numround=0
-        self.isEnd=False
+        # player1是电脑选手, player2是人类玩家
+        self.player1, self.player2 = self.start()
+        self.numround = 0  # 标记游戏进行的轮数
+        self.isEnd = False  # 标记游戏是否结束
+        self.is_begin = False  # 标记游戏是否开始
+        self.winner = ''  # 记录获得胜利的玩家
+        self.activate_player   = None  # 当前正在活跃的选手
+        self.inactivate_player = None  # 当前没有活跃的选手
     
     def start(self):
         # 均等概率初始化，决定谁先出。
         c1,c2=random.uniform(0,1),random.uniform(0,1)
-        return AiPlayer(c1>=c2,"AiPlayer"),Player(c1<c2,"Player")
+        return AiPlayer(c1>=c2,"AiPlayer"), Player(c1<c2,"Player")
     
+    def slient_start(self, myhd, ophd):
+        '''
+        myhd:玩家准备用于触碰的手
+        ophd:电脑准备用于触碰的手
+        return:游戏进行状态、玩家的数据和电脑的数据 例：True,[[[玩家左手数字,玩家右手数字],[技能1,技能2,技能3]],[[电脑左手数字,电脑右手数字],[技能1,技能2,技能3]]]、False,获胜者名称(技能顺序：弓、箭、盾)
+        '''
+        # 检测是否是第一次启动
+        if not self.is_begin:
+            if self.player1.stats is True:
+                self.activate_player   = self.player1
+                self.inactivate_player = self.player2
+            else:
+                self.activate_player   = self.player2
+                self.inactivate_player = self.player1
+            self.is_begin = True
+        # 检测游戏是否结束
+        if self.numround >= 200 or self.isEnd:
+            self.isEnd = True
+            print("游戏已结束")
+            return False, self.winner
+        self.numround+=1
+        print(f"第{self.numround}回合，请{self.activate_player.name}行动")
+        # main 对于玩家，此处直接采用从前端界面传回的数据；对于电脑，继续沿用之前的方法
+        try:
+            pass
+        except:
+            myhd,ophd = self.activate_player.combine(self.inactivate_player,self.inactivate_player.hl,self.inactivate_player.hr)
         
+        self.process(self.activate_player, self.inactivate_player, myhd, ophd)
+        # 交换当前活跃的选手和静默的选手
+        tmp = self.activate_player
+        self.activate_player = self.inactivate_player
+        self.inactivate_player = tmp
+        print('游戏结束？',self.isEnd)
+        return True, [
+            [
+                [self.player1.hl, self.player1.hr],
+                [self.player1.numBow, self.player1.numArrow, self.player1.numShield],
+            ],
+            [
+                [self.player2.hl, self.player2.hr],
+                [self.player2.numBow, self.player2.numArrow, self.player2.numShield],
+            ],
+        ]
+
+    # bug 因为较大幅度的修改参数，可能该函数的基本功能已经失效
     def GameStart(self):
-        # 抽签
         print("游戏开始")
         if self.player1.stats is True:
             activePlayer=self.player1
@@ -133,24 +181,14 @@ class GameController(object):
             inactivePlayer=self.player1
             
         print(f"根据抽签结果，请{activePlayer.name}先行动")
-        # 控制游戏开始
+        
         while not self.isEnd:
-            # 设置最大回合数
             if self.numround >= 200:
                 break
             self.numround+=1
             print(f"第{self.numround}回合，请{activePlayer.name}行动")
-            # 活跃玩家行动，输入不活跃玩家对象，左手数字，右手数字
-            # myhd就是当前玩家选择去碰的手 ophd是对方选择碰的手
-            myhd,ophd=activePlayer.combine(inactivePlayer)
-            # 处理结果， 返回所有信息
+            myhd,ophd=activePlayer.combine(inactivePlayer,inactivePlayer.hl,inactivePlayer.hr)
             self.process(activePlayer,inactivePlayer,myhd,ophd)
-            if self.isEnd == True:
-                # 如果某个玩家已经赢了，那么isEnd就会变成True。self.process 返回的是 赢的玩家名字,输得玩家名字
-                pass
-            else:
-                # 如果没有玩家赢，那么self.process 返回的是 ai玩家的参数，真实玩家的参数
-                pass
             tmp=activePlayer
             activePlayer=inactivePlayer
             inactivePlayer=tmp
@@ -195,18 +233,18 @@ class GameController(object):
         
 
         if inactivePlayer.numShield<0:
-            # print(f"{activePlayer.name}赢了!")
+            print(f"{activePlayer.name}赢了!")
+            self.winner = activePlayer.name
             activePlayer.score += 10
             self.isEnd=True
-            return activePlayer.name, inactivePlayer.name
         else:
-            # player 1 是Ai player2 是玩家
+            # main 停止打印状态，改为前端显示
+            pass
             # print(f"第{self.numround}回合,结果为：")
             # print(f"当前{self.player1.name}手上的数字左手：{self.player1.hl},右手：{self.player1.hr}。")
             # print(f"弓个数{self.player1.numBow}，箭个数{self.player1.numArrow}，盾个数{self.player1.numShield}")
             # print(f"当前{self.player2.name}手上的数字左手：{self.player2.hl},右手：{self.player2.hr}。")
             # print(f"弓个数{self.player2.numBow}，箭个数{self.player2.numArrow}，盾个数{self.player2.numShield}")
-            return (self.player1.hl, self.player1.hr, self.player1.numBow, self.player1.numArrow, self.player1.numShield),(self.player2.hl, self.player2.hr, self.player2.numBow, self.player2.numArrow, self.player2.numShield)
         
 
 

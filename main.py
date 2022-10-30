@@ -1,3 +1,4 @@
+#-*- coding : utf-8-*-
 import os
 import cv2
 import time
@@ -33,7 +34,7 @@ show_data   = np.zeros((130,640,3))  # 数据展示区域
 DATA_POINT  = [(177,45),(259,45),(440,45),(177,98),(259,98),(440,98)]
 PH, AH = None, None # 玩家触碰手，AI触碰手
 game_state  = True  # 用于标示游戏进行状态，True表示正在进行，False表示游戏结束
-wait_num    = 0
+IS_T = False  # 判断手掌判断点是否在触碰区域内
 
 mp_drawing        = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
@@ -49,6 +50,8 @@ for name in img_source:
         im = cv2.cvtColor(np.array(im)[::IQ,::IQ], cv2.COLOR_RGB2BGR)
     ICO.append(im)
     ico_index.append(np.where(im != 0))
+win_img  = cv2.imread("./data/win.jpg")
+lose_img = cv2.imread("./data/lose.jpg")
 
 # 计算point1与point2之间的距离
 d = lambda point1, point2:((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2)**0.5
@@ -110,17 +113,18 @@ def show_skill(frame, arrow, bow, shield):
         frame = cv2.putText(frame, str(pe_num[index]), (SEP*(index+1)+w*index + int(w/3), SEP*2+h), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
         # 绘制AI选手技能
         frame[SEP:h+SEP, W-(SEP*(index+1)+w*(index+1)):W-(SEP*(index+1)+w*index)] = chartlet(frame[SEP:h+SEP, W-(SEP*(index+1)+w*(index+1)):W-(SEP*(index+1)+w*index)], ICO[index], icon_index=ico_index[index])
-        frame = cv2.putText(frame, str(ai_num[index]), (W-(SEP*(index+1)+w*index + int(w*2/3)), SEP*2+h), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        frame = cv2.putText(frame, str(ai_num[index]), (W-(SEP*(index+1)+w*index + int(w*2/3)), SEP*2+h), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2) 
     return frame
 
 def touch_place(frame, hand_points):
     '''
-    判断手指是否移动到触碰区
+    判断手指是否移动到触碰区，在移动到触碰区后将全局触碰变量IS_T置为True，若未到触碰区则将IS_T
 
     frame:当前帧图片
     hand_points:所有手关节点的坐标
     return:图像和触碰情况
     '''
+    global IS_T
     h, w = frame.shape[:-1]
     p0 = hand_points[0][9][0]*w, hand_points[0][9][1]*h
     if d(p0 , LC) < R:
@@ -138,7 +142,9 @@ def touch_place(frame, hand_points):
             frame[ico_index[5][:2]] = np.array([254, 216, 192])
             return 1,1
     except:
+        IS_T = False
         return False
+    IS_T = False
     return False
     #cv2.circle(frame, LC, R, (0,0,0), thickness=2)
     #cv2.circle(frame, RC, R, (0,0,0), thickness=2)
@@ -246,99 +252,112 @@ def get_number(hand_points):
         number.append(None)
     return number
 
-cap  = cv2.VideoCapture(0)
-game = GameController()
-with mp_hands.Hands(
-    max_num_hands=2,
-    model_complexity=0,
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5) as hands:
-    data_image = ICO[-1]  #数据显示区
-    fps = 10  # 触碰等待时间依赖于fps数设立，需初始化fps
-    while cap.isOpened():
-        time1 = time.time()
-        success, image = cap.read()
-        if not success:
-            print("Ignoring empty camera frame.")
-            continue
-        # 取消图像标记可提升程序性能
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        # 将图片翻转
-        image = cv2.flip(image, 1)
-        # 进行预测
-        results = hands.process(image)
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-        # 左右手索引是否翻转
-        is_invert = False
-        if results.multi_hand_landmarks != None:
-            # 绘制手部关键点图像
-            for hand_landmarks in results.multi_hand_landmarks:
-                mp_drawing.draw_landmarks(
-                    image,
-                    hand_landmarks,
-                    mp_hands.HAND_CONNECTIONS,
-                    mp_drawing_styles.get_default_hand_landmarks_style(),
-                    mp_drawing_styles.get_default_hand_connections_style())
-            hand_points = get_landmarks(results.multi_hand_landmarks)
-            hands_info  = get_label(results.multi_handedness)
-            for points in hand_points:
-                mid_center = int(points[9][0]*640), int(points[9][1]*480)
-                image = cv2.circle(image, mid_center, 3, (0,0,0), thickness=2)
-            if len(hand_points[0]) == 21:
-                hands_num = get_number(hand_points)
-            else:
-                hands_num = [None, None]
-            for index, hand_label in enumerate(hands_info.keys()):
-                # 仅在出现一只以上的手时才使用索引
-                if len(hands_info.keys()) > 1:
-                    # 若只出现多只手，则使用索引
-                    index = hands_info[hand_label][0]
-                tmp_point = (
-                    int(hand_points[index][0][0]*image.shape[1]),
-                    int(hand_points[index][0][1]*image.shape[0])
-                )
-                # 确保hands_num = [左手数字, 右手数字]
-                if (hand_label == "Right" and hands_info[hand_label][0] == 0)or(hand_label == "Left" and hands_info[hand_label][0] == 1)or(len(hands_info.keys())<=1 and hand_label == "Right"):
-                    hands_num = hands_num[::-1]
-                    is_invert = True
-                # 绘制左右手的标签和检测数字
-                image = cv2.putText(image, hand_label, tmp_point, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                image = cv2.putText(image, str(hands_num[index]), (tmp_point[0], tmp_point[1]+50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-            # 绘制触碰区并判断触碰情况
-            if is_invert:
-                touch_info = touch_place(image,hand_points[::-1])
-            else:
-                touch_info = touch_place(image,hand_points)
-            if touch_info != False and wait_num <= 0:
+while True:
+    a1,a2,a3,p1,p2,p3,p_l,p_r,a_l,a_r = 0,0,0,0,0,0,1,1,1,1
+    cap  = cv2.VideoCapture(2)
+    game = GameController()
+    with mp_hands.Hands(
+        max_num_hands=2,
+        model_complexity=0,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5) as hands:
+        data_image = ICO[-1]  #数据显示区
+        fps = 10  # 触碰等待时间依赖于fps数设立，需初始化fps
+        while cap.isOpened():
+            time1 = time.time()
+            success, image = cap.read()
+            image = image[:,::-1,:]
+            if not success:
+                print("Ignoring empty camera frame.")
+                continue
+            # 取消图像标记可提升程序性能
+            image = cv2.resize(image, [640,480])
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            # 将图片翻转
+            image = cv2.flip(image, 1)
+            # 进行预测
+            results = hands.process(image)
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            # 左右手索引是否翻转
+            is_invert = False
+            if results.multi_hand_landmarks != None:
+                # 绘制手部关键点图像
+                for hand_landmarks in results.multi_hand_landmarks:
+                    mp_drawing.draw_landmarks(
+                        image,
+                        hand_landmarks,
+                        mp_hands.HAND_CONNECTIONS,
+                        mp_drawing_styles.get_default_hand_landmarks_style(),
+                        mp_drawing_styles.get_default_hand_connections_style())
+                hand_points = get_landmarks(results.multi_hand_landmarks)
+                hands_info  = get_label(results.multi_handedness)
+                for points in hand_points:
+                    mid_center = int(points[9][0]*640), int(points[9][1]*480)
+                    image = cv2.circle(image, mid_center, 3, (0,0,0), thickness=2)
+                if len(hand_points[0]) == 21:
+                    hands_num = get_number(hand_points)
+                else:
+                    hands_num = [None, None]
+                for index, hand_label in enumerate(hands_info.keys()):
+                    # 仅在出现一只以上的手时才使用索引
+                    if len(hands_info.keys()) > 1:
+                        # 若只出现多只手，则使用索引
+                        index = hands_info[hand_label][0]
+                    tmp_point = (
+                        int(hand_points[index][0][0]*image.shape[1]),
+                        int(hand_points[index][0][1]*image.shape[0])
+                    )
+                    # 确保hands_num = [左手数字, 右手数字]
+                    if (hand_label == "Right" and hands_info[hand_label][0] == 0)or(hand_label == "Left" and hands_info[hand_label][0] == 1)or(len(hands_info.keys())<=1 and hand_label == "Right"):
+                        hands_num = hands_num[::-1]
+                        is_invert = True
+                    # 绘制左右手的标签和检测数字
+                    image = cv2.putText(image, hand_label, tmp_point, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                    image = cv2.putText(image, str(hands_num[index]), (tmp_point[0], tmp_point[1]+50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                # 绘制触碰区并判断触碰情况
                 if is_invert:
-                    game_state, player_info = game.slient_start(touch_info[0], touch_info[1])
+                    touch_info = touch_place(image,hand_points[::-1])
                 else:
-                    game_state, player_info = game.slient_start(touch_info[0], touch_info[1])
-                if game_state:
-                    (p_l, p_r), (p1, p2, p3) = player_info[0]
-                    (a_l, a_r), (a1, a2, a3) = player_info[1]
-                else:
-                    # main 游戏结束
-                    break
-                    # todo 游戏结束页面
-                wait_num = fps
-            else:
-                wait_num -= 1
-            # 绘制技能、数字信息
-            # todo 仅在参数更新时更改参数显示区数据
-            try:
-                data_image = draw_data(image, skill_data=[a1,a2,a3,p1,p2,p3], figure_data=[[hands_num[0],p_l,a_l],[hands_num[1],p_r,a_r]])
-            except:
-                data_image = draw_data(image, skill_data=[0,0,0,0,0,0], figure_data=[[hands_num[0],1,1],[hands_num[1],1,1]])
+                    touch_info = touch_place(image,hand_points)
+                if touch_info != False and not IS_T:
+                    IS_T = True
+                    if is_invert:
+                        game_state, player_info = game.slient_start(touch_info[0], touch_info[1])
+                    else:
+                        game_state, player_info = game.slient_start(touch_info[0], touch_info[1])
+                    if game_state:
+                        (p_l, p_r), (p1, p2, p3) = player_info[0]
+                        (a_l, a_r), (a1, a2, a3) = player_info[1]
+                    else:
+                        if "Ai" in player_info:
+                            for _ in range(10):
+                                cv2.imshow('MediaPipe Hands', lose_img)
+                                cv2.waitKey(1)
+                        else:
+                            for _ in range(10):
+                                cv2.imshow('MediaPipe Hands', win_img)
+                                cv2.waitKey(1)
+                        # main 游戏结束
+                        break
+                        # todo 游戏结束页面
+                # 绘制技能、数字信息
+                # todo 仅在参数更新时更改参数显示区数据
+                try:
+                    data_image = draw_data(image, skill_data=[a1,a2,a3,p1,p2,p3], figure_data=[[hands_num[0],p_l,a_l],[hands_num[1],p_r,a_r]])
+                except:
+                    data_image = draw_data(image, skill_data=[0,0,0,0,0,0], figure_data=[[hands_num[0],1,1],[hands_num[1],1,1]])
 
-        image = draw_ico(image)
-        # 拼接数据显示区
-        image = np.concatenate((data_image, image),axis=0)
-        # 显示fps
-        fps = int(1/(time.time() - time1))
-        image = cv2.putText(image, 'fps:'+str(fps), (300,220), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-        cv2.imshow('MediaPipe Hands', image)
-        if cv2.waitKey(5) & 0xFF == 27:
-            break
-cap.release()
-cv2.destroyAllWindows()
+            image = draw_ico(image)
+            # 拼接数据显示区
+            image = np.concatenate((data_image, image),axis=0)
+            # 显示fps
+            fps = int(1/(time.time() - time1))
+            image = cv2.putText(image, 'fps:'+str(fps), (300,220), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            cv2.imshow('MediaPipe Hands', image)
+            if cv2.waitKey(5) & 0xFF == 27:
+                cap.release()
+                cv2.destroyAllWindows()
+                exit(0)
+                break
+    cap.release()
+    cv2.destroyAllWindows()
